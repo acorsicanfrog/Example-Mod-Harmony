@@ -73,6 +73,11 @@
       <Private>false</Private>
     </Reference>
 
+        <!-- Used for blurred background UI images (to match the game's 'modern' UI style) -->
+    <Reference Include="TranslucentImage">
+      <Private>false</Private>
+    </Reference>
+
   </ItemGroup>
 
 </Project>
