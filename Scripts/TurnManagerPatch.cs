@@ -41,7 +41,7 @@ class TurnManagerPatch
 
         [HarmonyPostfix]
         [HarmonyPatch(nameof(TurnManager.NextTurn))]
-        static void Patch_NextTurn(bool sendRPC)
+        static void Patch_NextTurn(bool p_sendRPC)
         {
             Canvas canvas = FindCanvas();
 
