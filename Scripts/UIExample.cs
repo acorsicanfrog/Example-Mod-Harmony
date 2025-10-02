@@ -1,3 +1,4 @@
+using TMPro;
 using System;
 using System.IO;
 using UnityEngine;
@@ -7,26 +8,65 @@ using LeTai.Asset.TranslucentImage;
 
 class UIExample
 {
+    // Colors used in the base game, regular grey and yellow for highlight
+    static Color grey = new Color(0.588f, 0.6f, 0.611f);
+    static Color yellow = new Color(1f, 0.8f, 0f);
+
+    static bool initialized = false;
+
     // Reusing the same material for every UI elements in order to save performances
     static Material sharedMaterial;
 
-    // Must be called before using anything else, otherwise material will be null
-    public static void Initialize()
+    public static void StartExample()
     {
-        sharedMaterial = new Material(Shader.Find("UI/TranslucentImage"));
-        sharedMaterial.SetFloat("_Vibrancy", 1.8f);
+        Initialize();
+
+        CreateExampleMenu();
     }
 
-    public static void CreateExampleMenu()
+    // Must be called before using anything else, otherwise material will be null
+    static void Initialize()
     {
-        CreateWindow("Example Window", new Vector2(500f, 250f));
+        if (initialized) return; // Failsafe
+
+        sharedMaterial = new Material(Shader.Find("UI/TranslucentImage"));
+        sharedMaterial.SetFloat("_Vibrancy", 1.8f);
+
+        initialized = true;
+    }
+
+    static void CreateExampleMenu()
+    {
+        GameObject window = CreateWindow("Example Window", new Vector2(500f, 250f));
+
+        Button button = CreateButton("Example Button", new Vector2(100f, 35f), "OK");
+        button.transform.SetParent(window.transform, false);
+        button.onClick.AddListener(delegate { MyButtonAction(); });
+
+        Image image = button.gameObject.AddComponent<TranslucentImage>();
+
+        TranslucentImage translucentImage = (TranslucentImage)image;
+        translucentImage.material = sharedMaterial;
+        translucentImage.spriteBlending = 0.65f;
+        image.raycastTarget = true;
+
+        string filePath = Path.Combine(ExampleMod.modInstallLocation, "Graphics", "UI", "Buttons", "Button square.png");
+
+        Sprite sprite = LoadPngAsSlicedSprite(filePath, 30f, 100f);
+
+        ApplyToImage(image, sprite, 3f);
+    }
+
+    static void MyButtonAction()
+    {
+        UIManager.ShowMessage("IT HURTS! DON'T DO THAT AGAIN.");
     }
 
     public static GameObject CreateWindow(string p_objectName, Vector2 p_dimension, bool p_preventClickThrough = true, bool p_useTranslucency = true)
     {
         GameObject gameObject = new GameObject(p_objectName);
 
-        Canvas canvas = FindCanvas();
+        Canvas canvas = GetCanvas();
 
         gameObject.transform.SetParent(canvas.transform, false);
 
@@ -62,7 +102,67 @@ class UIExample
         return gameObject;
     }
 
-    static Canvas FindCanvas()
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension, string p_buttonText)
+    {
+        Button button = CreateButton(p_objectName, p_dimension);
+
+        GameObject textObject = new GameObject($"{p_objectName}:text");
+        textObject.transform.SetParent(button.transform, false);
+
+        RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.anchoredPosition = Vector2.zero;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+
+        TextMeshProUGUI textMeshProUGUI = textObject.AddComponent<TextMeshProUGUI>();
+        textMeshProUGUI.fontSize = 20f;
+        textMeshProUGUI.color = Color.white;
+        textMeshProUGUI.verticalAlignment = VerticalAlignmentOptions.Middle;
+        textMeshProUGUI.horizontalAlignment = HorizontalAlignmentOptions.Center;
+        textMeshProUGUI.margin = new Vector4(5f, 5f, 5f, 5f);
+        textMeshProUGUI.text = p_buttonText;
+
+        button.targetGraphic = textMeshProUGUI;
+
+        return button;
+    }
+
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension)
+    {
+        GameObject buttonObject = new GameObject(p_objectName);
+
+        Canvas canvas = GetCanvas();
+
+        buttonObject.transform.SetParent(canvas.transform, false);
+
+        RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
+        rectTransform.sizeDelta = p_dimension;
+        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
+
+        Button button = buttonObject.AddComponent<Button>();
+
+        ColorBlock colorBlock = new ColorBlock();
+        colorBlock.colorMultiplier = 1f;
+        colorBlock.normalColor = grey;
+        colorBlock.selectedColor = grey;
+        colorBlock.highlightedColor = yellow;
+        colorBlock.pressedColor = grey;
+        colorBlock.disabledColor = grey * 0.5f;
+
+        button.colors = colorBlock;
+
+        return button;
+    }
+
+    /// <summary>
+    /// Find and return the appropriate Canvas based on what scene is currently active
+    /// </summary>
+    /// <returns></returns>
+    static Canvas GetCanvas()
     {
         Scene scene = SceneManager.GetActiveScene();
 
@@ -81,6 +181,8 @@ class UIExample
         {
             return GameObject.FindObjectOfType<Canvas>();
         }
+
+        Debug.LogWarning("No canvas was found.");
 
         return null;
     }

@@ -71,7 +71,6 @@ public class ExampleMod : GameModification
 
         PlayerLogOpener.OpenPlayerLogLocation();
 
-        UIExample.Initialize();
-        UIExample.CreateExampleMenu();
+        UIExample.StartExample();
     }
 }
