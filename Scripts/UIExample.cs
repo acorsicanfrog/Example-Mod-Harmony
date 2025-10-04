@@ -9,13 +9,13 @@ using LeTai.Asset.TranslucentImage;
 class UIExample
 {
     // Colors used in the base game, regular grey and yellow for highlight
-    static Color grey = new Color(0.588f, 0.6f, 0.611f);
-    static Color yellow = new Color(1f, 0.8f, 0f);
+    static readonly Color Grey = new Color(0.588f, 0.6f, 0.611f);
+    static readonly Color Yellow = new Color(1f, 0.8f, 0f);
 
-    static bool initialized = false;
+    static bool _initialized = false;
 
     // Reusing the same material for every UI elements in order to save performances
-    static Material sharedMaterial;
+    static Material _sharedTransluscentMat;
 
     public static void StartExample()
     {
@@ -27,12 +27,12 @@ class UIExample
     // Must be called before using anything else, otherwise material will be null
     static void Initialize()
     {
-        if (initialized) return; // Failsafe
+        if (_initialized) return; // Failsafe
 
-        sharedMaterial = new Material(Shader.Find("UI/TranslucentImage"));
-        sharedMaterial.SetFloat("_Vibrancy", 1.8f);
+        _sharedTransluscentMat = new Material(Shader.Find("UI/TranslucentImage"));
+        _sharedTransluscentMat.SetFloat("_Vibrancy", 1.8f);
 
-        initialized = true;
+        _initialized = true;
     }
 
     static void CreateExampleMenu()
@@ -46,7 +46,7 @@ class UIExample
         Image image = button.gameObject.AddComponent<TranslucentImage>();
 
         TranslucentImage translucentImage = (TranslucentImage)image;
-        translucentImage.material = sharedMaterial;
+        translucentImage.material = _sharedTransluscentMat;
         translucentImage.spriteBlending = 0.65f;
         image.raycastTarget = true;
 
@@ -74,7 +74,6 @@ class UIExample
         rectTransform.sizeDelta = p_dimension;
         rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
         rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
 
         Image image;
 
@@ -83,7 +82,7 @@ class UIExample
             image = gameObject.AddComponent<TranslucentImage>();
 
             TranslucentImage translucentImage = (TranslucentImage)image;
-            translucentImage.material = sharedMaterial;
+            translucentImage.material = _sharedTransluscentMat;
             translucentImage.spriteBlending = 0.65f;
         }
         else
@@ -129,6 +128,29 @@ class UIExample
         return button;
     }
 
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension, Sprite p_buttonIcon)
+    {
+        Button button = CreateButton(p_objectName, p_dimension);
+
+        GameObject textObject = new GameObject($"{p_objectName}:image");
+        textObject.transform.SetParent(button.transform, false);
+
+        RectTransform rectTransform = textObject.AddComponent<RectTransform>();
+        rectTransform.anchorMin = Vector2.zero;
+        rectTransform.anchorMax = Vector2.one;
+        rectTransform.anchoredPosition = Vector2.zero;
+        rectTransform.offsetMin = Vector2.zero;
+        rectTransform.offsetMax = Vector2.zero;
+
+        Image image = textObject.AddComponent<Image>();
+        image.color = Color.white;
+        image.sprite = p_buttonIcon;
+
+        button.targetGraphic = image;
+
+        return button;
+    }
+
     public static Button CreateButton(string p_objectName, Vector2 p_dimension)
     {
         GameObject buttonObject = new GameObject(p_objectName);
@@ -147,11 +169,11 @@ class UIExample
 
         ColorBlock colorBlock = new ColorBlock();
         colorBlock.colorMultiplier = 1f;
-        colorBlock.normalColor = grey;
-        colorBlock.selectedColor = grey;
-        colorBlock.highlightedColor = yellow;
-        colorBlock.pressedColor = grey;
-        colorBlock.disabledColor = grey * 0.5f;
+        colorBlock.normalColor = Grey;
+        colorBlock.selectedColor = Grey;
+        colorBlock.highlightedColor = Yellow;
+        colorBlock.pressedColor = Grey;
+        colorBlock.disabledColor = Grey * 0.5f;
 
         button.colors = colorBlock;
 
