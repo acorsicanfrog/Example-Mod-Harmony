@@ -98,7 +98,7 @@ class UIExample
         GameObject window = CreateWindow("Example Window", DEFAULT_WINDOW_SIZE);
 
         // Create a button with localized text.
-        Button button = CreateButton("Example Button", DEFAULT_BUTTON_SIZE, LocalizationManager.Translate("ExampleMod.UI.iamabutton"), FontStyles.UpperCase);
+        Button button = CreateButton("Example Button", DEFAULT_BUTTON_SIZE, "ExampleMod.UI.iamabutton", FontStyles.UpperCase);
 
         // Parent the button to the window so it sits on top.
         button.transform.SetParent(window.transform, false);
@@ -180,7 +180,7 @@ class UIExample
     /// <summary>
     /// Create a button with a text label. The button is parented to the active Canvas by default.
     /// </summary>
-    public static Button CreateButton(string p_objectName, Vector2 p_dimension, string p_buttonText, FontStyles p_fontStyle = FontStyles.Normal)
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension, string p_localizationKey, FontStyles p_fontStyle = FontStyles.Normal)
     {
         Button button = CreateButton(p_objectName, p_dimension);
 
@@ -192,13 +192,18 @@ class UIExample
         StretchToFill(rt);
 
         TextMeshProUGUI tmp = textGO.AddComponent<TextMeshProUGUI>();
+        tmp.enableAutoSizing = true; // Optional, disable if you want a fixed text size
         tmp.fontSize = 20f;
+        tmp.fontSizeMin = 10f;
+        tmp.fontSizeMax = 20f;
         tmp.color = Color.white;
+        tmp.fontStyle = p_fontStyle;
+        tmp.margin = new Vector4(10f, 5f, 10f, 5f); // LEFT, TOP, RIGHT, BOTTOM
         tmp.verticalAlignment = VerticalAlignmentOptions.Middle;
         tmp.horizontalAlignment = HorizontalAlignmentOptions.Center;
-        tmp.margin = new Vector4(5f, 5f, 5f, 5f);
-        tmp.text = p_buttonText;
-        tmp.fontStyle = p_fontStyle;
+        tmp.text = LocalizationManager.Translate(p_localizationKey);
+
+        textGO.AddComponent<LocalizedText>().key = p_localizationKey;
 
         // IMPORTANT:
         // targetGraphic controls which Graphic gets tinted by the Button's ColorBlock during state transitions.
@@ -286,21 +291,18 @@ class UIExample
 
         // Main Menu
         if (scene.buildIndex == 0)
-        {
             return MainMenu.instance.UI_parent.GetComponent<Canvas>();
-        }
+
         // Game
-        else if (scene.buildIndex == 1)
-        {
+        if (scene.buildIndex == 1)
             return UIManager.instance.mainCanvas;
-        }
+
         // Scenario Editor
-        else if (scene.buildIndex == 2)
-        {
+        if (scene.buildIndex == 2)
             return GameObject.FindObjectOfType<Canvas>();
-        }
 
         Debug.LogWarning("UIExample.GetCanvas: No canvas found for this scene.");
+
         return null;
     }
 
@@ -321,7 +323,7 @@ class UIExample
         // Clamp borders so they never exceed half of width/height to avoid invalid slice regions.
         p_borderPx = ClampBorder(p_borderPx, p_texture2D.width, p_texture2D.height);
 
-        return Sprite.Create(
+        Sprite sprite = Sprite.Create(
             texture: p_texture2D,
             rect: rect,
             pivot: p_pivot ?? new Vector2(0.5f, 0.5f),
@@ -331,6 +333,10 @@ class UIExample
             border: p_borderPx,
             generateFallbackPhysicsShape: false
         );
+
+        sprite.name = p_texture2D.name;
+
+        return sprite;
     }
 
     /// <summary>
@@ -358,6 +364,7 @@ class UIExample
         );
 
         clone.name = p_original.name + "_sliced";
+
         return clone;
     }
 
@@ -395,7 +402,8 @@ class UIExample
         byte[] bytes = File.ReadAllBytes(p_filePath);
 
         // For UI textures, mipmaps are usually unnecessary; set mipChain:false to save memory.
-        var texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        Texture2D texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        texture2D.name = p_filePath;
 
         // We don't need pixel reads later, so markNonReadable:true to free CPU-side memory.
         texture2D.LoadImage(bytes, markNonReadable: true);
@@ -410,8 +418,9 @@ class UIExample
     {
         byte[] bytes = EmbeddedResourceLoader.LoadResourceBytes(p_filePath);
 
-        var texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        Texture2D texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
         texture2D.LoadImage(bytes, markNonReadable: true);
+        texture2D.name = p_filePath;
 
         return CreateSlicedSprite(texture2D, Vector4.one * p_uniformBorderPx, p_pixelsPerUnit);
     }
