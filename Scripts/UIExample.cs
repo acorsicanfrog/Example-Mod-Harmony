@@ -6,311 +6,476 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using LeTai.Asset.TranslucentImage;
 
+/// <summary>
+/// Minimal, self-contained example showing how to dynamically build UI at runtime
+/// 
+/// Notes for modders:
+/// - Call StartExample() once to spawn the demo window + button.
+/// - This example uses a single shared translucent material to avoid per-object allocations.
+/// - You can switch asset loading between embedded (from the DLL) and disk via LOAD_RESOURCES_FROM_DLL.
+/// </summary>
 class UIExample
 {
-    // Colors used in the base game, regular grey and yellow for highlight
-    static readonly Color Grey = new Color(0.588f, 0.6f, 0.611f);
-    static readonly Color Yellow = new Color(1f, 0.8f, 0f);
+    // -------------------------------------------------------------------------
+    // Configuration
+    // -------------------------------------------------------------------------
 
-    static bool _initialized = false;
+    /// <summary>Switch to FALSE to load resources from disk instead of from the embedded DLL.</summary>
+    private const bool LOAD_RESOURCES_FROM_DLL = true;
 
-    // Reusing the same material for every UI elements in order to save performances
-    static Material _sharedTransluscentMat;
+    /// <summary>Shader used by LeTai Translucent Image.</summary>
+    private const string TRANSLUCENT_SHADER = "UI/TranslucentImage";
 
+    /// <summary>Embedded resource path for the example button/window sprite.</summary>
+    private const string EMBEDDED_BUTTON_SPRITE = "ExampleMod.Graphics.UI.Button.png";
+
+    /// <summary>Disk path (relative to the mod install location) to the example sprite.</summary>
+    private static readonly string DISK_BUTTON_SPRITE = Path.Combine(ExampleMod.modInstallLocation, "Graphics", "UI", "Buttons", "Button.png");
+
+    /// <summary>Default 9-slice border in pixels (L, B, R, T all the same if using the uniform overload).</summary>
+    private const float DEFAULT_SLICE_BORDER_PX = 30f;
+
+    /// <summary>Default pixels-per-unit used when creating sprites.</summary>
+    private const float DEFAULT_PPU = 100f;
+
+    /// <summary>Default translucency blending (0..1) for TranslucentImage.</summary>
+    private const float DEFAULT_SPRITE_BLENDING = 0.65f;
+
+    /// <summary>Example window default size.</summary>
+    private static readonly Vector2 DEFAULT_WINDOW_SIZE = new Vector2(500f, 250f);
+
+    /// <summary>Example button default size.</summary>
+    private static readonly Vector2 DEFAULT_BUTTON_SIZE = new Vector2(200f, 50f);
+
+    // Colors used by the base game for interactive UI elements.
+    private static readonly Color Grey = new Color(0.588f, 0.6f, 0.611f);
+    private static readonly Color Yellow = new Color(1f, 0.8f, 0f);
+
+    // Lifecycle
+    private static bool _initialized;
+
+    // Reuse the same material across all translucent images to save allocations & draw calls.
+    private static Material _sharedTranslucentMat;
+
+    // -------------------------------------------------------------------------
+    // Entry point
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Entry point to run the example. Safe to call multiple times.
+    /// </summary>
     public static void StartExample()
     {
         Initialize();
-
         CreateExampleMenu();
     }
 
-    // Must be called before using anything else, otherwise material will be null
-    static void Initialize()
+    /// <summary>
+    /// One-time setup for shared resources (material, etc.).
+    /// Must be called before creating any UI that uses the translucent shader.
+    /// </summary>
+    private static void Initialize()
     {
-        if (_initialized) return; // Failsafe
+        if (_initialized) return;
 
-        _sharedTransluscentMat = new Material(Shader.Find("UI/TranslucentImage"));
-        _sharedTransluscentMat.SetFloat("_Vibrancy", 1.8f);
+        // Create the shared material once. This avoids per-element material instances.
+        _sharedTranslucentMat = new Material(Shader.Find(TRANSLUCENT_SHADER));
+        _sharedTranslucentMat.SetFloat("_Vibrancy", 1.8f);
 
         _initialized = true;
     }
 
-    static void CreateExampleMenu()
-    {
-        GameObject window = CreateWindow("Example Window", new Vector2(500f, 250f));
+    // -------------------------------------------------------------------------
+    // Demo UI
+    // -------------------------------------------------------------------------
 
-        Button button = CreateButton("Example Button", new Vector2(100f, 35f), "OK");
+    /// <summary>
+    /// Builds a simple window with a single button to demonstrate dynamic UI creation.
+    /// </summary>
+    private static void CreateExampleMenu()
+    {
+        // Create a centered window.
+        GameObject window = CreateWindow("Example Window", DEFAULT_WINDOW_SIZE);
+
+        // Create a button with localized text.
+        Button button = CreateButton("Example Button", DEFAULT_BUTTON_SIZE, LocalizationManager.Translate("ExampleMod.UI.iamabutton"), FontStyles.UpperCase);
+
+        // Parent the button to the window so it sits on top.
         button.transform.SetParent(window.transform, false);
-        button.onClick.AddListener(delegate { MyButtonAction(); });
 
-        Image image = button.gameObject.AddComponent<TranslucentImage>();
+        // Make the background of the button translucent and 9-sliced.
+        // NOTE: We add TranslucentImage onto the *button* GameObject itself (background).
+        Image buttonBackground = button.gameObject.AddComponent<TranslucentImage>();
+        ConfigureTranslucentImage((TranslucentImage)buttonBackground, DEFAULT_SPRITE_BLENDING);
+        buttonBackground.raycastTarget = true; // block clicks "through" the button
 
-        TranslucentImage translucentImage = (TranslucentImage)image;
-        translucentImage.material = _sharedTransluscentMat;
-        translucentImage.spriteBlending = 0.65f;
-        image.raycastTarget = true;
+        // Load the demo sprite (from DLL or disk) and apply it as sliced to the background image.
+        Sprite sprite = LoadButtonSprite();
+        ApplyToImage(buttonBackground, sprite, p_pixelPerUnitMultiplier: 3f);
 
-        string filePath = Path.Combine(ExampleMod.modInstallLocation, "Graphics", "UI", "Buttons", "Button square.png");
-
-        Sprite sprite = LoadPngAsSlicedSprite(filePath, 30f, 100f);
-
-        ApplyToImage(image, sprite, 3f);
+        // Hook up the click action.
+        button.onClick.AddListener(PerformButtonAction);
     }
 
-    static void MyButtonAction()
+    /// <summary>
+    /// Example action for the demo button.
+    /// </summary>
+    private static void PerformButtonAction()
     {
-        UIManager.ShowMessage("IT HURTS! DON'T DO THAT AGAIN.");
+        UIManager.ShowMessage("IT HURT!\nDON'T DO THAT AGAIN.");
     }
 
+    // -------------------------------------------------------------------------
+    // UI Factories
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Creates a centered window GameObject with an (optional) translucent, 9-sliced background.
+    /// </summary>
+    /// <param name="p_objectName">Name for the GameObject.</param>
+    /// <param name="p_dimension">Width/height in local canvas units.</param>
+    /// <param name="p_preventClickThrough">If true, blocks raycasts to UI behind the window.</param>
+    /// <param name="p_useTranslucency">If true, uses TranslucentImage for the background.</param>
     public static GameObject CreateWindow(string p_objectName, Vector2 p_dimension, bool p_preventClickThrough = true, bool p_useTranslucency = true)
     {
-        GameObject gameObject = new GameObject(p_objectName);
-
         Canvas canvas = GetCanvas();
 
-        gameObject.transform.SetParent(canvas.transform, false);
+        if (canvas == null)
+        {
+            Debug.LogWarning("UIExample.CreateWindow: No Canvas found. Aborting.");
+            return null;
+        }
 
-        RectTransform rectTransform = gameObject.AddComponent<RectTransform>();
-        rectTransform.sizeDelta = p_dimension;
-        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        GameObject go = new GameObject(p_objectName);
+        go.transform.SetParent(canvas.transform, false);
 
-        Image image;
+        // Setup RectTransform and center it.
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.sizeDelta = p_dimension;
+        CenterInParent(rt);
+
+        // Background image (translucent or normal).
+        Image bg;
 
         if (p_useTranslucency)
         {
-            image = gameObject.AddComponent<TranslucentImage>();
-
-            TranslucentImage translucentImage = (TranslucentImage)image;
-            translucentImage.material = _sharedTransluscentMat;
-            translucentImage.spriteBlending = 0.65f;
+            var translucent = go.AddComponent<TranslucentImage>();
+            ConfigureTranslucentImage(translucent, DEFAULT_SPRITE_BLENDING);
+            bg = translucent;
         }
         else
         {
-            image = gameObject.AddComponent<Image>();
+            bg = go.AddComponent<Image>();
         }
 
-        image.raycastTarget = p_preventClickThrough;
+        bg.raycastTarget = p_preventClickThrough;
 
-        string filePath = Path.Combine(ExampleMod.modInstallLocation, "Graphics", "UI", "Buttons", "Button square.png");
+        // Apply the sliced sprite.
+        Sprite sprite = LoadButtonSprite();
+        ApplyToImage(bg, sprite, p_pixelPerUnitMultiplier: 2f);
 
-        Sprite sprite = LoadPngAsSlicedSprite(filePath, 30f, 100f);
-
-        ApplyToImage(image, sprite, 2f);
-
-        return gameObject;
+        return go;
     }
 
-    public static Button CreateButton(string p_objectName, Vector2 p_dimension, string p_buttonText)
+    /// <summary>
+    /// Create a button with a text label. The button is parented to the active Canvas by default.
+    /// </summary>
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension, string p_buttonText, FontStyles p_fontStyle = FontStyles.Normal)
     {
         Button button = CreateButton(p_objectName, p_dimension);
 
-        GameObject textObject = new GameObject($"{p_objectName}:text");
-        textObject.transform.SetParent(button.transform, false);
+        // Child that stretches to fill the button for the label.
+        GameObject textGO = new GameObject($"{p_objectName}:text");
+        textGO.transform.SetParent(button.transform, false);
 
-        RectTransform rectTransform = textObject.AddComponent<RectTransform>();
-        rectTransform.anchorMin = Vector2.zero;
-        rectTransform.anchorMax = Vector2.one;
-        rectTransform.anchoredPosition = Vector2.zero;
-        rectTransform.offsetMin = Vector2.zero;
-        rectTransform.offsetMax = Vector2.zero;
+        RectTransform rt = textGO.AddComponent<RectTransform>();
+        StretchToFill(rt);
 
-        TextMeshProUGUI textMeshProUGUI = textObject.AddComponent<TextMeshProUGUI>();
-        textMeshProUGUI.fontSize = 20f;
-        textMeshProUGUI.color = Color.white;
-        textMeshProUGUI.verticalAlignment = VerticalAlignmentOptions.Middle;
-        textMeshProUGUI.horizontalAlignment = HorizontalAlignmentOptions.Center;
-        textMeshProUGUI.margin = new Vector4(5f, 5f, 5f, 5f);
-        textMeshProUGUI.text = p_buttonText;
+        TextMeshProUGUI tmp = textGO.AddComponent<TextMeshProUGUI>();
+        tmp.fontSize = 20f;
+        tmp.color = Color.white;
+        tmp.verticalAlignment = VerticalAlignmentOptions.Middle;
+        tmp.horizontalAlignment = HorizontalAlignmentOptions.Center;
+        tmp.margin = new Vector4(5f, 5f, 5f, 5f);
+        tmp.text = p_buttonText;
+        tmp.fontStyle = p_fontStyle;
 
-        button.targetGraphic = textMeshProUGUI;
-
-        return button;
-    }
-
-    public static Button CreateButton(string p_objectName, Vector2 p_dimension, Sprite p_buttonIcon)
-    {
-        Button button = CreateButton(p_objectName, p_dimension);
-
-        GameObject textObject = new GameObject($"{p_objectName}:image");
-        textObject.transform.SetParent(button.transform, false);
-
-        RectTransform rectTransform = textObject.AddComponent<RectTransform>();
-        rectTransform.anchorMin = Vector2.zero;
-        rectTransform.anchorMax = Vector2.one;
-        rectTransform.anchoredPosition = Vector2.zero;
-        rectTransform.offsetMin = Vector2.zero;
-        rectTransform.offsetMax = Vector2.zero;
-
-        Image image = textObject.AddComponent<Image>();
-        image.color = Color.white;
-        image.sprite = p_buttonIcon;
-
-        button.targetGraphic = image;
-
-        return button;
-    }
-
-    public static Button CreateButton(string p_objectName, Vector2 p_dimension)
-    {
-        GameObject buttonObject = new GameObject(p_objectName);
-
-        Canvas canvas = GetCanvas();
-
-        buttonObject.transform.SetParent(canvas.transform, false);
-
-        RectTransform rectTransform = buttonObject.AddComponent<RectTransform>();
-        rectTransform.sizeDelta = p_dimension;
-        rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-        rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-        rectTransform.anchoredPosition = new Vector2(0.5f, 0.5f);
-
-        Button button = buttonObject.AddComponent<Button>();
-
-        ColorBlock colorBlock = new ColorBlock();
-        colorBlock.colorMultiplier = 1f;
-        colorBlock.normalColor = Grey;
-        colorBlock.selectedColor = Grey;
-        colorBlock.highlightedColor = Yellow;
-        colorBlock.pressedColor = Grey;
-        colorBlock.disabledColor = Grey * 0.5f;
-
-        button.colors = colorBlock;
+        // IMPORTANT:
+        // targetGraphic controls which Graphic gets tinted by the Button's ColorBlock during state transitions.
+        // Setting it to the text makes the label highlight on hover/press.
+        // If you want the background to tint instead, set this to the background Image you add elsewhere.
+        button.targetGraphic = tmp;
 
         return button;
     }
 
     /// <summary>
-    /// Find and return the appropriate Canvas based on what scene is currently active
+    /// Create a button with an icon (Image) child. The button is parented to the active Canvas by default.
     /// </summary>
-    /// <returns></returns>
-    static Canvas GetCanvas()
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension, Sprite p_buttonIcon)
+    {
+        Button button = CreateButton(p_objectName, p_dimension);
+
+        GameObject iconGO = new GameObject($"{p_objectName}:image");
+        iconGO.transform.SetParent(button.transform, false);
+
+        RectTransform rt = iconGO.AddComponent<RectTransform>();
+        StretchToFill(rt);
+
+        Image icon = iconGO.AddComponent<Image>();
+        icon.color = Color.white;
+        icon.sprite = p_buttonIcon;
+
+        // See note above re: which graphic is tinted on hover/press.
+        button.targetGraphic = icon;
+
+        return button;
+    }
+
+    /// <summary>
+    /// Create a bare button (no background sprite, no text/icon). Parents to active Canvas.
+    /// </summary>
+    public static Button CreateButton(string p_objectName, Vector2 p_dimension)
+    {
+        Canvas canvas = GetCanvas();
+
+        if (canvas == null)
+        {
+            Debug.LogWarning("UIExample.CreateButton: No Canvas found. Aborting.");
+            return null;
+        }
+
+        GameObject go = new GameObject(p_objectName);
+        go.transform.SetParent(canvas.transform, false);
+
+        RectTransform rt = go.AddComponent<RectTransform>();
+        rt.sizeDelta = p_dimension;
+        CenterInParent(rt);
+
+        Button button = go.AddComponent<Button>();
+
+        // Setup button state colors (matches base game style).
+        ColorBlock cb = new ColorBlock
+        {
+            colorMultiplier = 1f,
+            normalColor = Grey,
+            selectedColor = Grey,
+            highlightedColor = Yellow,
+            pressedColor = Grey,
+            disabledColor = Grey * 0.5f,
+            fadeDuration = 0.1f
+        };
+
+        button.colors = cb;
+
+        return button;
+    }
+
+    // -------------------------------------------------------------------------
+    // Canvas discovery
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Find and return the appropriate Canvas based on the currently active scene.
+    /// Scene indices:
+    /// 0 - Main Menu, 1 - Game, 2 - Scenario Editor
+    /// </summary>
+    private static Canvas GetCanvas()
     {
         Scene scene = SceneManager.GetActiveScene();
 
-        // Main Menu scene
+        // Main Menu
         if (scene.buildIndex == 0)
         {
             return MainMenu.instance.UI_parent.GetComponent<Canvas>();
         }
-        // Game scene
+        // Game
         else if (scene.buildIndex == 1)
         {
             return UIManager.instance.mainCanvas;
         }
-        // Scenario Editor scene
+        // Scenario Editor
         else if (scene.buildIndex == 2)
         {
             return GameObject.FindObjectOfType<Canvas>();
         }
 
-        Debug.LogWarning("No canvas was found.");
-
+        Debug.LogWarning("UIExample.GetCanvas: No canvas found for this scene.");
         return null;
     }
 
+    // -------------------------------------------------------------------------
+    // Sprite + Image utilities (9-slicing helpers)
+    // -------------------------------------------------------------------------
+
     /// <summary>
     /// Create a 9-sliced Sprite directly from a Texture2D.
-    /// borderPx = (left, bottom, right, top) in *pixels*.
+    /// borderPx is (left, bottom, right, top) in pixels.
     /// </summary>
-    public static Sprite CreateSlicedSprite(Texture2D tex, Vector4 borderPx, float pixelsPerUnit = 100f, Vector2? pivot = null)
+    public static Sprite CreateSlicedSprite(Texture2D p_texture2D, Vector4 p_borderPx, float p_pixelsPerUnit = DEFAULT_PPU, Vector2? p_pivot = null)
     {
-        if (tex == null) throw new ArgumentNullException(nameof(tex));
+        if (p_texture2D == null) throw new ArgumentNullException(nameof(p_texture2D));
 
-        Rect rect = new Rect(0, 0, tex.width, tex.height);
+        Rect rect = new Rect(0, 0, p_texture2D.width, p_texture2D.height);
 
-        // Clamp borders so they never exceed half of width/height.
-        borderPx = ClampBorder(borderPx, tex.width, tex.height);
+        // Clamp borders so they never exceed half of width/height to avoid invalid slice regions.
+        p_borderPx = ClampBorder(p_borderPx, p_texture2D.width, p_texture2D.height);
 
         return Sprite.Create(
-            texture: tex,
+            texture: p_texture2D,
             rect: rect,
-            pivot: pivot ?? new Vector2(0.5f, 0.5f),
-            pixelsPerUnit: pixelsPerUnit,
+            pivot: p_pivot ?? new Vector2(0.5f, 0.5f),
+            pixelsPerUnit: p_pixelsPerUnit,
             extrude: 0,
             meshType: SpriteMeshType.FullRect,
-            border: borderPx,
+            border: p_borderPx,
             generateFallbackPhysicsShape: false
         );
     }
 
     /// <summary>
-    /// Clone an existing Sprite but add a 9-slice border.
+    /// Clone an existing Sprite but add a 9-slice border without copying pixels.
     /// </summary>
-    public static Sprite CloneWithBorder(Sprite original, Vector4 borderPx)
+    public static Sprite CloneWithBorder(Sprite p_original, Vector4 p_borderPx)
     {
-        if (original == null) throw new ArgumentNullException(nameof(original));
+        if (p_original == null) throw new ArgumentNullException(nameof(p_original));
 
-        Texture2D tex = original.texture;
-        Rect rect = original.rect;
+        Texture2D tex = p_original.texture;
+        Rect rect = p_original.rect;
 
-        // Clamp borders to sub-rect, not full texture.
-        borderPx = ClampBorder(borderPx, rect.width, rect.height);
+        // Clamp borders to the sprite's sub-rect.
+        p_borderPx = ClampBorder(p_borderPx, rect.width, rect.height);
 
         Sprite clone = Sprite.Create(
             texture: tex,
             rect: rect,
-            pivot: original.pivot / original.rect.size,
-            pixelsPerUnit: original.pixelsPerUnit,
+            pivot: p_original.pivot / p_original.rect.size,
+            pixelsPerUnit: p_original.pixelsPerUnit,
             extrude: 0,
             meshType: SpriteMeshType.FullRect,
-            border: borderPx,
+            border: p_borderPx,
             generateFallbackPhysicsShape: false
         );
 
-        clone.name = original.name + "_sliced";
-
+        clone.name = p_original.name + "_sliced";
         return clone;
     }
 
     /// <summary>
     /// Assign a sliced sprite to a UI Image and configure its type.
     /// </summary>
-    public static void ApplyToImage(Image image, Sprite slicedSprite, float pixelPerUnitMultiplier = 1f, bool preserveAspect = false, bool fillCenter = true)
+    public static void ApplyToImage(Image p_image, Sprite p_slicedSprite, float p_pixelPerUnitMultiplier = 1f, bool p_preserveAspect = false, bool p_fillCenter = true)
     {
-        if (image == null) throw new ArgumentNullException(nameof(image));
-        if (slicedSprite == null) throw new ArgumentNullException(nameof(slicedSprite));
+        if (p_image == null) throw new ArgumentNullException(nameof(p_image));
+        if (p_slicedSprite == null) throw new ArgumentNullException(nameof(p_slicedSprite));
 
-        image.type = Image.Type.Sliced;
-        image.fillCenter = fillCenter;
-        image.preserveAspect = preserveAspect;
-        image.sprite = slicedSprite;
-        image.pixelsPerUnitMultiplier = pixelPerUnitMultiplier;
+        p_image.type = Image.Type.Sliced;
+        p_image.fillCenter = p_fillCenter;
+        p_image.preserveAspect = p_preserveAspect;
+        p_image.sprite = p_slicedSprite;
+        p_image.pixelsPerUnitMultiplier = p_pixelPerUnitMultiplier;
 
-        image.SetAllDirty();
+        // Mark for layout + visual rebuild.
+        p_image.SetAllDirty();
     }
 
     /// <summary>
-    /// Convenience: load a PNG from disk and return a sliced Sprite.
-    /// Accepts either a uniform border (all sides the same) or per-side.
+    /// Load a PNG from disk and return as a 9-sliced Sprite.
     /// </summary>
-    public static Sprite LoadPngAsSlicedSprite(string filePath, float uniformBorderPx, float pixelsPerUnit = 100f)
-        => LoadPngAsSlicedSprite(filePath, new Vector4(uniformBorderPx, uniformBorderPx, uniformBorderPx, uniformBorderPx), pixelsPerUnit);
+    public static Sprite LoadPNGasSlicedSprite(string p_filePath, float p_uniformBorderPx, float p_pixelsPerUnit = DEFAULT_PPU)
+        => LoadPNGasSlicedSprite(p_filePath, new Vector4(p_uniformBorderPx, p_uniformBorderPx, p_uniformBorderPx, p_uniformBorderPx), p_pixelsPerUnit);
 
-    public static Sprite LoadPngAsSlicedSprite(string filePath, Vector4 borderPx, float pixelsPerUnit = 100f)
+    /// <summary>
+    /// Load a PNG from disk and return as a 9-sliced Sprite.
+    /// </summary>
+    public static Sprite LoadPNGasSlicedSprite(string p_filePath, Vector4 p_borderPx, float p_pixelsPerUnit = DEFAULT_PPU)
     {
-        if (!File.Exists(filePath)) throw new FileNotFoundException(filePath);
+        if (!File.Exists(p_filePath)) throw new FileNotFoundException(p_filePath);
 
-        byte[] bytes = File.ReadAllBytes(filePath);
-        Texture2D tex = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: true);
+        byte[] bytes = File.ReadAllBytes(p_filePath);
 
-        tex.LoadImage(bytes, markNonReadable: false); // keep readable = false if you don't need to access pixels
+        // For UI textures, mipmaps are usually unnecessary; set mipChain:false to save memory.
+        var texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
 
-        return CreateSlicedSprite(tex, borderPx, pixelsPerUnit);
+        // We don't need pixel reads later, so markNonReadable:true to free CPU-side memory.
+        texture2D.LoadImage(bytes, markNonReadable: true);
+
+        return CreateSlicedSprite(texture2D, p_borderPx, p_pixelsPerUnit);
     }
 
-    // --- helpers ---
-    private static Vector4 ClampBorder(Vector4 border, float width, float height)
+    /// <summary>
+    /// Load a PNG embedded as a resource in the mod DLL and return as a 9-sliced Sprite.
+    /// </summary>
+    public static Sprite LoadEmbeddedPNGasSlicedSprite(string p_filePath, float p_uniformBorderPx, float p_pixelsPerUnit = DEFAULT_PPU)
     {
-        float maxX = Mathf.Max(0, width / 2f);
-        float maxY = Mathf.Max(0, height / 2f);
+        byte[] bytes = EmbeddedResourceLoader.LoadResourceBytes(p_filePath);
+
+        var texture2D = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+        texture2D.LoadImage(bytes, markNonReadable: true);
+
+        return CreateSlicedSprite(texture2D, Vector4.one * p_uniformBorderPx, p_pixelsPerUnit);
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Load the example sprite either from DLL or disk based on LOAD_RESOURCES_FROM_DLL.
+    /// </summary>
+    private static Sprite LoadButtonSprite()
+    {
+        if (LOAD_RESOURCES_FROM_DLL)
+            return LoadEmbeddedPNGasSlicedSprite(EMBEDDED_BUTTON_SPRITE, DEFAULT_SLICE_BORDER_PX, DEFAULT_PPU);
+
+        return LoadPNGasSlicedSprite(DISK_BUTTON_SPRITE, DEFAULT_SLICE_BORDER_PX, DEFAULT_PPU);
+    }
+
+    /// <summary>
+    /// Configure a TranslucentImage component with the shared material and a blending factor.
+    /// </summary>
+    private static void ConfigureTranslucentImage(TranslucentImage p_image, float p_blending)
+    {
+        p_image.material = _sharedTranslucentMat;
+        p_image.spriteBlending = p_blending;
+    }
+
+    /// <summary>
+    /// Clamp 9-slice border values so they don't exceed half the width/height.
+    /// </summary>
+    private static Vector4 ClampBorder(Vector4 p_border, float p_width, float p_height)
+    {
+        float maxX = Mathf.Max(0, p_width / 2f);
+        float maxY = Mathf.Max(0, p_height / 2f);
 
         // border = (L, B, R, T)
-        border.x = Mathf.Clamp(border.x, 0, maxX);
-        border.z = Mathf.Clamp(border.z, 0, maxX);
-        border.y = Mathf.Clamp(border.y, 0, maxY);
-        border.w = Mathf.Clamp(border.w, 0, maxY);
+        p_border.x = Mathf.Clamp(p_border.x, 0, maxX);
+        p_border.z = Mathf.Clamp(p_border.z, 0, maxX);
+        p_border.y = Mathf.Clamp(p_border.y, 0, maxY);
+        p_border.w = Mathf.Clamp(p_border.w, 0, maxY);
 
-        return border;
+        return p_border;
+    }
+
+    /// <summary>
+    /// Center a RectTransform within its parent using middle anchors and zeroed offsets.
+    /// </summary>
+    private static void CenterInParent(RectTransform p_rectTransform)
+    {
+        p_rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+        p_rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+        p_rectTransform.anchoredPosition = Vector2.zero; // exact center
+    }
+
+    /// <summary>
+    /// Make a RectTransform stretch to fill its parent (useful for text/icon children).
+    /// </summary>
+    private static void StretchToFill(RectTransform p_rectTransform)
+    {
+        p_rectTransform.anchorMin = Vector2.zero;
+        p_rectTransform.anchorMax = Vector2.one;
+        p_rectTransform.anchoredPosition = Vector2.zero;
+        p_rectTransform.offsetMin = Vector2.zero;
+        p_rectTransform.offsetMax = Vector2.zero;
     }
 }

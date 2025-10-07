@@ -11,6 +11,12 @@
     <DebugType>none</DebugType>
   </PropertyGroup>
 
+<!-- Embedding resources into the DLL -->
+<ItemGroup>
+    <!-- <EmbeddedResource Include="Graphics/UI/Button.png"/> Including a very specific PNG file -->
+    <EmbeddedResource Include="Graphics/UI/*.png"/> <!-- Including every PNG files in the UI folder  -->
+</ItemGroup>
+
   <ItemGroup>
 
       <!-- Harmony library (patching API) -->

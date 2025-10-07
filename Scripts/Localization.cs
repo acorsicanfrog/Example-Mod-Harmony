@@ -28,31 +28,37 @@ class Localization
     {
         [GameLanguages.EN] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "I am a button",
             ["policy.name.Example Policy"] = "Example policy",
             ["policy.description.Example Policy"] = "This is the english description for this example policy.",
         },
         [GameLanguages.FR] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "Je suis un bouton",
             ["policy.name.Example Policy"] = "Police d'exemple",
             ["policy.description.Example Policy"] = "Voici la description française de la police d'exemple.",
         },
         [GameLanguages.RU] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "Я кнопка",
             ["policy.name.Example Policy"] = "Пример политики",
             ["policy.description.Example Policy"] = "Это описание на русском языке для этой примерной политики.",
         },
         [GameLanguages.ES] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "Soy un botón",
             ["policy.name.Example Policy"] = "Política de ejemplo",
             ["policy.description.Example Policy"] = "Esta es la descripción en español para esta política de ejemplo.",
         },
         [GameLanguages.DE] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "Ich bin ein Knopf",
             ["policy.name.Example Policy"] = "Beispielrichtlinie",
             ["policy.description.Example Policy"] = "Dies ist die deutsche Beschreibung für diese Beispielrichtlinie.",
         },
         [GameLanguages.CNS] = new Dictionary<string, string>
         {
+            ["ExampleMod.UI.iamabutton"] = "我是按钮",
             ["policy.name.Example Policy"] = "示例政策",
             ["policy.description.Example Policy"] = "这是此示例政策的中文说明。",
         },
@@ -80,10 +86,8 @@ class Localization
         if (_entries.TryGetValue(p_lang, out var map) && map.TryGetValue(p_key, out o_value))
             return true;
 
-        if (_entries.TryGetValue(GameLanguages.EN, out var en) && en.TryGetValue(p_key, out o_value))
-            return true;
-
         o_value = null;
+
         return false;
     }
 }
