@@ -69,7 +69,7 @@ class Localization
     {
         static bool Prefix(string p_key, ref string __result)
         {
-            GameLanguages lang = PlayerSettings.GetInstance().Language;
+            GameLanguages lang = PlayerSettings.Instance.Language;
 
             if (TryGet(lang, p_key, out var val))
             {

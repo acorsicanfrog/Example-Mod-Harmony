@@ -107,7 +107,7 @@ class PlayerPatch
 
             float modifier = 1f; // Modifier applied to base game manpower growth value
 
-            switch (PlayerSettings.GetInstance().DifficultyLevel)
+            switch (PlayerSettings.Instance.DifficultyLevel)
             {
                 default:
                 case 1:

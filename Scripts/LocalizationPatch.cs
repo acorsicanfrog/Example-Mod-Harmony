@@ -33,7 +33,7 @@ static class Patch_LocalizationManager
     [HarmonyPatch(nameof(LocalizationManager.SetActiveLocale))]
     static void Patch_Post_SetActiveLocale(Locale_Base p_locale)
     {
-        GameLanguages lang = PlayerSettings.GetInstance().Language;
+        GameLanguages lang = PlayerSettings.Instance.Language;
 
         try
         {

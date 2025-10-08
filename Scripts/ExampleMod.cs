@@ -24,7 +24,6 @@
 // ==================================================================================
 
 using HarmonyLib;
-using UnityEngine;
 
 public class ExampleMod : GameModification
 {
@@ -35,36 +34,43 @@ public class ExampleMod : GameModification
 
     public ExampleMod(Mod p_mod) : base(p_mod)
     {
-        Debug.Log($"[MOD:{p_mod.name}] Registering...");
+        p_mod.Log("Registering...");
     }
 
+    /// <summary>
+    /// Entry point, no more, no less
+    /// </summary>
+    /// <param name="p_mod"></param>
     public override void OnModInitialization(Mod p_mod)
     {
-        Debug.Log($"[MOD:{p_mod.name}] Initializing...");
-
         mod = p_mod;
 
-        modName = mod.name;
-        modInstallLocation = mod.installLocation;
+        mod.Log("Initializing...");
+
+        modName = mod.Name;
+        modInstallLocation = mod.InstallLocation;
 
         ApplyPatches();
     }
 
+    /// <summary>
+    /// Removes all the modifications your mod applied to the game
+    /// </summary>
     public override void OnModUnloaded()
     {
-        Debug.Log($"[MOD:{modName}] Unloading...");
+        mod.Log("Unloading...");
 
         _harmony?.UnpatchAll(_harmony.Id);
     }
 
     /// <summary>
-    /// Applying all of our patches to the game
+    /// Applies all of the modifications your mod is designed to perform
     /// </summary>
     void ApplyPatches()
     {
-        Debug.Log($"[MOD:{modName}] Applying Patches...");
+        mod.Log("Applying patches...");
 
-        _harmony = new Harmony("com.hexofsteel." + mod.name);
+        _harmony = new Harmony("com.hexofsteel." + mod.Name);
         _harmony.PatchAll();
 
         RuntimeImageLoader.Initialize();
