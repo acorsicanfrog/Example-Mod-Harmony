@@ -34,7 +34,7 @@ public class ExampleMod : GameModification
 
     public ExampleMod(Mod p_mod) : base(p_mod)
     {
-        p_mod.Log("Registering...");
+        Log("Registering...");
     }
 
     /// <summary>
@@ -43,12 +43,10 @@ public class ExampleMod : GameModification
     /// <param name="p_mod"></param>
     public override void OnModInitialization(Mod p_mod)
     {
-        mod = p_mod;
+        Log("Initializing...");
 
-        mod.Log("Initializing...");
-
-        modName = mod.Name;
-        modInstallLocation = mod.InstallLocation;
+        modName = Mod.Name;
+        modInstallLocation = Mod.InstallLocation;
 
         ApplyPatches();
     }
@@ -58,7 +56,7 @@ public class ExampleMod : GameModification
     /// </summary>
     public override void OnModUnloaded()
     {
-        mod.Log("Unloading...");
+        Log("Unloading...");
 
         _harmony?.UnpatchAll(_harmony.Id);
     }
@@ -68,9 +66,9 @@ public class ExampleMod : GameModification
     /// </summary>
     void ApplyPatches()
     {
-        mod.Log("Applying patches...");
+        Log("Applying patches...");
 
-        _harmony = new Harmony("com.hexofsteel." + mod.Name);
+        _harmony = new Harmony("com.hexofsteel." + Mod.Name);
         _harmony.PatchAll();
 
         RuntimeImageLoader.Initialize();
